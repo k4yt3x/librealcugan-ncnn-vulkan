@@ -1,23 +1,41 @@
+cmake_minimum_required(VERSION 3.9)
+project(librealcugan-ncnn-vulkan)
+
+# Set policies
 cmake_policy(SET CMP0091 NEW)
 set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-project(realcugan-ncnn-vulkan)
+# Set the C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-cmake_minimum_required(VERSION 3.9)
+# Ensure position-independent code for shared libraries
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Set build type if not specified
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE release CACHE STRING "Choose the type of build" FORCE)
+    set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# Options
 option(USE_SYSTEM_NCNN "build with system libncnn" OFF)
-option(USE_SYSTEM_WEBP "build with system libwebp" OFF)
 option(USE_STATIC_MOLTENVK "link moltenvk static library" OFF)
 
+# Find packages
 find_package(Threads)
 find_package(OpenMP)
 find_package(Vulkan REQUIRED)
 
+# Find glslangValidator
+find_program(GLSLANGVALIDATOR_EXECUTABLE NAMES glslangValidator PATHS $ENV{VULKAN_SDK}/bin NO_CMAKE_FIND_ROOT_PATH)
+if(NOT GLSLANGVALIDATOR_EXECUTABLE)
+    message(FATAL_ERROR "glslangValidator not found. Please install Vulkan SDK.")
+endif()
+message(STATUS "Found glslangValidator: ${GLSLANGVALIDATOR_EXECUTABLE}")
+
+# Shader compilation macro
 macro(realcugan_add_shader SHADER_SRC)
     get_filename_component(SHADER_SRC_NAME_WE ${SHADER_SRC} NAME_WE)
     set(SHADER_COMP_HEADER ${CMAKE_CURRENT_BINARY_DIR}/${SHADER_SRC_NAME_WE}.comp.hex.h)
@@ -54,45 +72,8 @@ else()
 endif()
 
 if(USE_SYSTEM_NCNN)
-    set(GLSLANG_TARGET_DIR "GLSLANG-NOTFOUND" CACHE PATH "Absolute path to glslangTargets.cmake directory")
-    if(NOT GLSLANG_TARGET_DIR AND NOT DEFINED ENV{GLSLANG_TARGET_DIR})
-        message(WARNING "GLSLANG_TARGET_DIR must be defined! USE_SYSTEM_NCNN will be turned off.")
-        set(USE_SYSTEM_NCNN OFF)
-    else()
-        message(STATUS "Using glslang install located at ${GLSLANG_TARGET_DIR}")
-
-        find_package(Threads)
-
-        include("${GLSLANG_TARGET_DIR}/OSDependentTargets.cmake")
-        include("${GLSLANG_TARGET_DIR}/OGLCompilerTargets.cmake")
-        if(EXISTS "${GLSLANG_TARGET_DIR}/HLSLTargets.cmake")
-            # hlsl support can be optional
-            include("${GLSLANG_TARGET_DIR}/HLSLTargets.cmake")
-        endif()
-        include("${GLSLANG_TARGET_DIR}/glslangTargets.cmake")
-        include("${GLSLANG_TARGET_DIR}/SPIRVTargets.cmake")
-
-        if (NOT TARGET glslang OR NOT TARGET SPIRV)
-            message(WARNING "glslang or SPIRV target not found! USE_SYSTEM_NCNN will be turned off.")
-            set(USE_SYSTEM_NCNN OFF)
-        endif()
-    endif()
-endif()
-
-if(USE_SYSTEM_NCNN)
-    find_package(ncnn)
-    if(NOT TARGET ncnn)
-        message(WARNING "ncnn target not found! USE_SYSTEM_NCNN will be turned off.")
-        set(USE_SYSTEM_NCNN OFF)
-    endif()
-endif()
-
-if(NOT USE_SYSTEM_NCNN)
-    # build ncnn library
-    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ncnn/CMakeLists.txt")
-        message(FATAL_ERROR "The submodules were not downloaded! Please update submodules with \"git submodule update --init --recursive\" and try again.")
-    endif()
-
+    find_package(ncnn REQUIRED)
+else()
     option(NCNN_INSTALL_SDK "" OFF)
     option(NCNN_PIXEL_ROTATE "" OFF)
     option(NCNN_PIXEL_AFFINE "" OFF)
@@ -106,6 +87,8 @@ if(NOT USE_SYSTEM_NCNN)
     option(NCNN_DISABLE_RTTI "" ON)
     option(NCNN_DISABLE_EXCEPTION "" ON)
     option(NCNN_INT8 "" OFF)
+    option(NCNN_BUILD_SHARED_LIBS "" OFF)
+    option(SKIP_GLGLANG_INSTALL "" ON)
 
     option(WITH_LAYER_absval "" OFF)
     option(WITH_LAYER_argmax "" OFF)
@@ -205,40 +188,6 @@ if(NOT USE_SYSTEM_NCNN)
     add_subdirectory(ncnn)
 endif()
 
-if(USE_SYSTEM_WEBP)
-    set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
-    find_package(WebP)
-    if(NOT TARGET webp)
-        message(WARNING "webp target not found! USE_SYSTEM_WEBP will be turned off.")
-        set(USE_SYSTEM_WEBP OFF)
-    endif()
-endif()
-
-if(NOT USE_SYSTEM_WEBP)
-    # build libwebp library
-    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libwebp/CMakeLists.txt")
-        message(FATAL_ERROR "The submodules were not downloaded! Please update submodules with \"git submodule update --init --recursive\" and try again.")
-    endif()
-
-    option(WEBP_ENABLE_SIMD "" ON)
-    option(WEBP_BUILD_ANIM_UTILS "" OFF)
-    option(WEBP_BUILD_CWEBP "" OFF)
-    option(WEBP_BUILD_DWEBP "" OFF)
-    option(WEBP_BUILD_GIF2WEBP "" OFF)
-    option(WEBP_BUILD_IMG2WEBP "" OFF)
-    option(WEBP_BUILD_VWEBP "" OFF)
-    option(WEBP_BUILD_WEBPINFO "" OFF)
-    option(WEBP_BUILD_WEBPMUX "" OFF)
-    option(WEBP_BUILD_EXTRAS "" OFF)
-    option(WEBP_BUILD_WEBP_JS "" OFF)
-    option(WEBP_NEAR_LOSSLESS "" OFF)
-    option(WEBP_ENABLE_SWAP_16BIT_CSP "" OFF)
-
-    add_subdirectory(libwebp)
-
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libwebp/src)
-endif()
-
 realcugan_add_shader(realcugan_preproc.comp)
 realcugan_add_shader(realcugan_postproc.comp)
 realcugan_add_shader(realcugan_4x_postproc.comp)
@@ -248,13 +197,30 @@ realcugan_add_shader(realcugan_4x_postproc_tta.comp)
 
 add_custom_target(generate-spirv DEPENDS ${SHADER_SPV_HEX_FILES})
 
-add_executable(realcugan-ncnn-vulkan main.cpp realcugan.cpp)
+add_library(librealcugan-ncnn-vulkan SHARED realcugan.cpp)
+target_compile_definitions(librealcugan-ncnn-vulkan PRIVATE LIBREALESRGAN_EXPORTS)
+if(WIN32)
+    set_target_properties(librealcugan-ncnn-vulkan PROPERTIES OUTPUT_NAME librealcugan-ncnn-vulkan)
+else()
+    set_target_properties(librealcugan-ncnn-vulkan PROPERTIES OUTPUT_NAME realcugan-ncnn-vulkan)
+endif()
 
-set_property(TARGET realcugan-ncnn-vulkan PROPERTY CXX_STANDARD 11)
+set_property(TARGET librealcugan-ncnn-vulkan PROPERTY CXX_STANDARD 11)
 
-add_dependencies(realcugan-ncnn-vulkan generate-spirv)
+add_dependencies(librealcugan-ncnn-vulkan generate-spirv)
 
-set(REALCUGAN_LINK_LIBRARIES ncnn webp ${Vulkan_LIBRARY})
+# Link libraries
+target_link_libraries(librealcugan-ncnn-vulkan PUBLIC ${Vulkan_LIBRARY})
+
+if (USE_SYSTEM_NCNN)
+    target_link_libraries(librealcugan-ncnn-vulkan PUBLIC ncnn)
+else()
+    target_link_libraries(librealcugan-ncnn-vulkan PRIVATE ncnn)
+endif()
+
+if (OPENMP_FOUND)
+    target_link_libraries(librealcugan-ncnn-vulkan PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 if(USE_STATIC_MOLTENVK)
     find_library(CoreFoundation NAMES CoreFoundation)
@@ -266,7 +232,7 @@ if(USE_STATIC_MOLTENVK)
     find_library(IOKit NAMES IOKit)
     find_library(IOSurface NAMES IOSurface)
 
-    list(APPEND REALCUGAN_LINK_LIBRARIES
+    target_link_libraries(librealcugan-ncnn-vulkan PUBLIC
         ${Metal}
         ${QuartzCore}
         ${CoreGraphics}
@@ -278,4 +244,58 @@ if(USE_STATIC_MOLTENVK)
     )
 endif()
 
-target_link_libraries(realcugan-ncnn-vulkan ${REALCUGAN_LINK_LIBRARIES})
+# Include directories
+target_include_directories(librealcugan-ncnn-vulkan PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
+
+# Ensure that the shared library uses at least C++17
+set_target_properties(librealcugan-ncnn-vulkan PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
+
+# Ensure position-independent code is used
+set_target_properties(librealcugan-ncnn-vulkan PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# ===================== Install Rules ===================== #
+
+# Install the library
+install(TARGETS librealcugan-ncnn-vulkan
+    EXPORT realcuganTargets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+)
+
+# Install the header file
+install(FILES realcugan.h DESTINATION include)
+
+# Install the generated shader headers
+install(FILES ${SHADER_SPV_HEX_FILES} DESTINATION include)
+
+# Install export targets
+install(EXPORT realcuganTargets
+    FILE realcuganTargets.cmake
+    NAMESPACE realcugan::
+    DESTINATION lib/cmake/realcugan
+)
+
+# Create and install the package configuration file
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/realcuganConfigVersion.cmake"
+    VERSION 1.0.0
+    COMPATIBILITY AnyNewerVersion
+)
+
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/realcuganConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/realcuganConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/realcugan
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/realcuganConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/realcuganConfigVersion.cmake"
+    DESTINATION lib/cmake/realcugan
+)

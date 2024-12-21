@@ -3,6 +3,16 @@
 #ifndef REALCUGAN_H
 #define REALCUGAN_H
 
+#ifdef WIN32
+#ifdef LIBREALCUGAN_EXPORTS
+#define LIBREALCUGAN_API __declspec(dllexport)
+#else
+#define LIBREALCUGAN_API __declspec(dllimport)
+#endif
+#else
+#define LIBREALCUGAN_API
+#endif
+
 #include <string>
 
 // ncnn
@@ -11,7 +21,7 @@
 #include "layer.h"
 
 class FeatureCache;
-class RealCUGAN
+class LIBREALCUGAN_API RealCUGAN
 {
 public:
     RealCUGAN(int gpuid, bool tta_mode = false, int num_threads = 1);
