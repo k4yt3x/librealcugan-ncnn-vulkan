@@ -20,8 +20,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Options
-option(USE_SYSTEM_NCNN "build with system libncnn" OFF)
-option(USE_STATIC_MOLTENVK "link moltenvk static library" OFF)
+option(USE_SYSTEM_NCNN "Build with system libncnn" OFF)
+option(USE_STATIC_MOLTENVK "Link moltenvk static library" OFF)
 
 # Find packages
 find_package(Threads)
@@ -73,7 +73,7 @@ endif()
 
 if(USE_SYSTEM_NCNN)
     find_package(ncnn REQUIRED)
-else()
+elseif(NOT TARGET ncnn)
     option(NCNN_INSTALL_SDK "" OFF)
     option(NCNN_PIXEL_ROTATE "" OFF)
     option(NCNN_PIXEL_AFFINE "" OFF)
@@ -195,9 +195,7 @@ realcugan_add_shader(realcugan_preproc_tta.comp)
 realcugan_add_shader(realcugan_postproc_tta.comp)
 realcugan_add_shader(realcugan_4x_postproc_tta.comp)
 
-add_custom_target(generate-spirv DEPENDS ${SHADER_SPV_HEX_FILES})
-
-add_library(librealcugan-ncnn-vulkan SHARED realcugan.cpp)
+add_library(librealcugan-ncnn-vulkan SHARED realcugan.cpp ${SHADER_SPV_HEX_FILES})
 target_compile_definitions(librealcugan-ncnn-vulkan PRIVATE LIBREALESRGAN_EXPORTS)
 if(WIN32)
     set_target_properties(librealcugan-ncnn-vulkan PROPERTIES OUTPUT_NAME librealcugan-ncnn-vulkan)
@@ -206,8 +204,6 @@ else()
 endif()
 
 set_property(TARGET librealcugan-ncnn-vulkan PROPERTY CXX_STANDARD 11)
-
-add_dependencies(librealcugan-ncnn-vulkan generate-spirv)
 
 # Link libraries
 target_link_libraries(librealcugan-ncnn-vulkan PUBLIC ${Vulkan_LIBRARY})
