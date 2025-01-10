@@ -88,7 +88,7 @@ elseif(NOT TARGET ncnn)
     option(NCNN_DISABLE_EXCEPTION "" ON)
     option(NCNN_INT8 "" OFF)
     option(NCNN_BUILD_SHARED_LIBS "" OFF)
-    option(SKIP_GLGLANG_INSTALL "" ON)
+    option(SKIP_GLSLANG_INSTALL "" ON)
 
     option(WITH_LAYER_absval "" OFF)
     option(WITH_LAYER_argmax "" OFF)
